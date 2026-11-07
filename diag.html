@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>摄像头诊断页</title>
+  <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+  <style>
+    html, body { margin: 0; padding: 0; background: #111; color: #eee; font-family: sans-serif; }
+    #ui { position: fixed; left: 0; right: 0; top: 0; z-index: 99; padding: 10px; box-sizing: border-box; }
+    button { font-size: 16px; padding: 12px 18px; margin: 0 8px 8px 0; border-radius: 8px; border: none; background: #e8c87e; color: #222; }
+    #log {
+      background: rgba(0,0,0,.78); color: #b6ffb0; font-size: 12px; line-height: 1.55;
+      padding: 10px; border-radius: 8px; white-space: pre-wrap; word-break: break-all;
+      max-height: 46vh; overflow-y: auto; margin: 0;
+    }
+    #plainCam { position: fixed; right: 8px; bottom: 8px; width: 38vw; z-index: 98; display: none; border: 2px solid #e8c87e; border-radius: 8px; background: #000; }
+  </style>
+</head>
+<body>
+  <div id="ui">
+    <button id="btnAR">按钮1：启动 AR 相机</button>
+    <button id="btnPlain">按钮2：直接看摄像头</button>
+    <pre id="log">诊断日志（点按钮1后等 5 秒，截图这一屏给我）</pre>
+  </div>
+  <video id="plainCam" autoplay playsinline muted></video>
+
+  <a-scene
+    mindar-image="imageTargetSrc: ./targets.mind; autoStart: false; uiLoading: no; uiScanning: no; filterMinCF: 0.001; filterBeta: 0.01;"
+    color-space="sRGB"
+    renderer="colorManagement: true; physicallyCorrectLights: true"
+    vr-mode-ui="enabled: false"
+    device-orientation-permission-ui="enabled: false">
+    <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+    <a-entity id="target" mindar-image-target="targetIndex: 0">
+      <a-plane color="#ffcc00" width="1" height="0.64" position="0 0 0.01"></a-plane>
+    </a-entity>
+  </a-scene>
+
+  <script>
+    const logEl = document.getElementById('log');
+    const t0 = Date.now();
+    function log(msg) {
+      const line = '[' + ((Date.now() - t0) / 1000).toFixed(1) + 's] ' + msg;
+      logEl.textContent += '\n' + line;
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+    window.addEventListener('error', (e) => log('页面报错: ' + e.message));
+
+    const sceneEl = document.querySelector('a-scene');
+    const targetEl = document.getElementById('target');
+    targetEl.addEventListener('targetFound', () => log('★ targetFound 扫到了！'));
+    targetEl.addEventListener('targetLost', () => log('targetLost'));
+
+    function dumpVideos(tag) {
+      const vids = Array.from(document.querySelectorAll('video'));
+      log(tag + '：页面里 video 元素共 ' + vids.length + ' 个');
+      vids.forEach((v, i) => {
+        const cs = getComputedStyle(v);
+        log(' video[' + i + '] id=' + (v.id || '(无)') +
+          ' 尺寸=' + v.videoWidth + 'x' + v.videoHeight +
+          ' readyState=' + v.readyState +
+          ' paused=' + v.paused +
+          ' currentTime=' + (v.currentTime ? v.currentTime.toFixed(2) : '0') +
+          ' 显示=' + cs.display + '/' + cs.visibility +
+          ' z=' + cs.zIndex +
+          ' 占屏=' + Math.round(v.getBoundingClientRect().width) + 'x' + Math.round(v.getBoundingClientRect().height));
+      });
+      const canvas = sceneEl.canvas || document.querySelector('canvas');
+      if (canvas) log(' canvas 占屏=' + Math.round(canvas.getBoundingClientRect().width) + 'x' + Math.round(canvas.getBoundingClientRect().height));
+    }
+
+    document.getElementById('btnAR').addEventListener('click', async () => {
+      log('点按钮1，准备启动 MindAR…');
+      try {
+        const sys = sceneEl.systems['mindar-image-system'];
+        if (!sys) { log('✗ 拿不到 mindar 系统，库可能没加载好'); return; }
+        await sys.start();
+        log('✓ MindAR start() 成功返回（它认为摄像头已开）');
+      } catch (e) {
+        log('✗ start() 报错: ' + (e && (e.name + ' ' + e.message)));
+        return;
+      }
+      dumpVideos('启动后立刻');
+      setTimeout(() => dumpVideos('启动后 3 秒'), 3000);
+    });
+
+    document.getElementById('btnPlain').addEventListener('click', async () => {
+      const v = document.getElementById('plainCam');
+      v.style.display = 'block';
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+        v.srcObject = stream;
+        await v.play();
+        log('✓ 按钮2：原生摄像头已出画面（右下角小窗），手机和浏览器本身没问题，问题在 AR 那层');
+      } catch (e) {
+        log('✗ 按钮2 也失败: ' + (e && (e.name + ' ' + e.message)) + ' —— 这说明是手机/浏览器层面的事');
+      }
+    });
+  </script>
+</body>
+</html>
