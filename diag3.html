@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>摄像头诊断页 3 · 位置与合成</title>
+  <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+  <style>
+    html, body { margin: 0; padding: 0; background: #111; color: #eee; font-family: sans-serif; }
+    #ui { position: fixed; left: 0; right: 0; top: 0; z-index: 99; padding: 10px; box-sizing: border-box; }
+    button { font-size: 15px; padding: 11px 14px; margin: 0 8px 8px 0; border-radius: 8px; border: none; background: #e8c87e; color: #222; }
+    #log {
+      background: rgba(0,0,0,.78); color: #b6ffb0; font-size: 12px; line-height: 1.55;
+      padding: 10px; border-radius: 8px; white-space: pre-wrap; word-break: break-all;
+      max-height: 44vh; overflow-y: auto; margin: 0;
+    }
+  </style>
+</head>
+<body>
+  <div id="ui">
+    <button id="btnStart">1：启动 AR 相机</button>
+    <button id="btnC">2 实验C：钉位置+调图层</button>
+    <pre id="log">点按钮1启动，等 3 秒日志出全，截图发我；再点实验C看画面</pre>
+  </div>
+
+  <a-scene
+    mindar-image="imageTargetSrc: ./targets.mind; autoStart: false; uiLoading: no; uiScanning: no; filterMinCF: 0.001; filterBeta: 0.01;"
+    color-space="sRGB"
+    renderer="colorManagement: true; physicallyCorrectLights: true"
+    vr-mode-ui="enabled: false"
+    device-orientation-permission-ui="enabled: false">
+    <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+    <a-entity id="target" mindar-image-target="targetIndex: 0">
+      <a-plane color="#ffcc00" width="1" height="0.64" position="0 0 0.01"></a-plane>
+    </a-entity>
+  </a-scene>
+
+  <script>
+    const logEl = document.getElementById('log');
+    const t0 = Date.now();
+    function log(msg) {
+      logEl.textContent += '\n[' + ((Date.now() - t0) / 1000).toFixed(1) + 's] ' + msg;
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+    window.addEventListener('error', (e) => log('页面报错: ' + e.message));
+
+    const sceneEl = document.querySelector('a-scene');
+    document.getElementById('target').addEventListener('targetFound', () => log('★ targetFound 扫到了！（黄色块应该贴在图上）'));
+    sceneEl.addEventListener('renderstart', () => {
+      try { log('画布初始 clearAlpha = ' + sceneEl.renderer.getClearAlpha()); } catch (e) {}
+    });
+
+    function mindarVideo() {
+      return Array.from(document.querySelectorAll('video')).find((v) => !v.id) || null;
+    }
+    function dump(tag) {
+      const v = mindarVideo();
+      if (!v) { log(tag + '：没找到相机 video'); return; }
+      const r = v.getBoundingClientRect();
+      const cs = getComputedStyle(v);
+      log(tag + '：相机video 位置 left=' + Math.round(r.left) + ' top=' + Math.round(r.top) +
+        ' 宽高=' + Math.round(r.width) + 'x' + Math.round(r.height) +
+        ' 窗口=' + window.innerWidth + 'x' + window.innerHeight +
+        ' transform=' + (cs.transform === 'none' ? 'none' : '有') +
+        ' 父元素=' + v.parentElement.tagName + (v.parentElement.className ? '.' + v.parentElement.className : ''));
+      const c = sceneEl.canvas;
+      if (c) {
+        const cr = c.getBoundingClientRect();
+        log(tag + '：画布 位置 left=' + Math.round(cr.left) + ' top=' + Math.round(cr.top) + ' 宽高=' + Math.round(cr.width) + 'x' + Math.round(cr.height));
+      }
+    }
+
+    document.getElementById('btnStart').addEventListener('click', async () => {
+      log('启动 MindAR…');
+      try {
+        await sceneEl.systems['mindar-image-system'].start();
+        log('✓ start() 成功');
+        dump('启动后立刻');
+        setTimeout(() => dump('启动后 3 秒'), 3000);
+      } catch (e) {
+        log('✗ start() 报错: ' + (e && (e.name + ' ' + e.message)));
+      }
+    });
+
+    document.getElementById('btnC').addEventListener('click', () => {
+      const v = mindarVideo();
+      if (!v) { log('实验C：没找到相机 video'); return; }
+      v.style.position = 'fixed';
+      v.style.left = '0';
+      v.style.top = '0';
+      v.style.width = '100%';
+      v.style.height = '100%';
+      v.style.transform = 'none';
+      v.style.objectFit = 'cover';
+      v.style.zIndex = '1';
+      const c = sceneEl.canvas;
+      if (c) { c.style.position = 'fixed'; c.style.inset = '0'; c.style.zIndex = '2'; }
+      try { sceneEl.renderer.setClearColor(0x000000, 0); } catch (e) {}
+      log('实验C 已执行：相机钉在 z=1 铺满，画布 z=2 并设透明。★ 画面出来了吗？出来后对着虹桥图扫一下，看黄块贴不贴得上');
+      setTimeout(() => dump('实验C 后'), 800);
+    });
+  </script>
+</body>
+</html>
