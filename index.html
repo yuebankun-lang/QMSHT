@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>清明上河图 · 虹桥 — 视频定格 AR</title>
+  <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+  <style>
+    html, body { margin: 0; padding: 0; overflow: hidden; touch-action: none; background: #1d150e; font-family: "PingFang SC", "Microsoft YaHei", sans-serif; }
+    canvas { touch-action: none; }
+    /* 开始界面 */
+    #startScreen {
+      position: fixed; inset: 0; z-index: 30; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 18px; overflow: hidden;
+      background: #2b2118; color: #f3e5cf; text-align: center; padding: 24px;
+    }
+    /* 底图:就用识别图那张虹桥原画,压暗加暖色,极慢地推近(慢到几乎看不出在动) */
+    #startScreen::before {
+      content: ''; position: absolute; inset: -4%;
+      background: url('./start_bg_blur.jpg') center / cover no-repeat;
+      filter: brightness(.66) sepia(.22) saturate(.95);
+      animation: startKenburns 26s ease-in-out infinite alternate;
+    }
+    @keyframes startKenburns { from { transform: scale(1); } to { transform: scale(1.09) translateX(-1.2%); } }
+    /* 双线金框:像画框的内沿 */
+    #startScreen::after {
+      content: ''; position: absolute; inset: 14px; pointer-events: none;
+      border: 1px solid rgba(232,200,126,.55);
+      outline: 1px solid rgba(232,200,126,.26); outline-offset: 5px;
+    }
+    #startScreen > * { position: relative; z-index: 1; }
+    #startScreen h1 {
+      font-family: "Songti SC", "STSong", "Noto Serif SC", "SimSun", serif;
+      font-size: 30px; margin: 0; letter-spacing: 5px; font-weight: 700;
+      text-shadow: 0 2px 16px rgba(0,0,0,.65);
+    }
+    .titleRow { display: flex; align-items: center; gap: 14px; }
+    /* 红印章:竖排两字,微微倾斜,像盖在画上的那方印 */
+    .seal {
+      width: 46px; height: 46px; flex: none; border-radius: 7px;
+      background: linear-gradient(145deg, #b03a2e, #8e241b); color: #f7ead9;
+      writing-mode: vertical-rl; font-family: "Songti SC", "STSong", serif;
+      font-size: 17px; letter-spacing: 3px; display: flex; align-items: center; justify-content: center;
+      transform: rotate(-4deg);
+      box-shadow: 0 3px 10px rgba(0,0,0,.4), inset 0 0 0 2px rgba(247,234,217,.35);
+    }
+    .divider { display: flex; align-items: center; gap: 10px; color: #e8c87e; opacity: .85; font-size: 9px; }
+    .divider .lineL, .divider .lineR { width: 56px; height: 1px; }
+    .divider .lineL { background: linear-gradient(90deg, transparent, #e8c87e); }
+    .divider .lineR { background: linear-gradient(90deg, #e8c87e, transparent); }
+    #startScreen p {
+      font-size: 14px; line-height: 1.7; opacity: .92; margin: 0; max-width: 330px;
+      background: rgba(30,22,14,.38); padding: 10px 16px; border-radius: 10px;
+      text-shadow: 0 1px 8px rgba(0,0,0,.6);
+    }
+    #startBtn {
+      margin-top: 8px; padding: 13px 42px; font-size: 17px; letter-spacing: 3px; cursor: pointer;
+      color: #2b2118; background: #e8c87e; border: none; border-radius: 999px; font-weight: 600;
+      box-shadow: 0 4px 18px rgba(0,0,0,.35);
+    }
+    #startBtn:active { transform: scale(.97); }
+    #startBtn { animation: btnGlow 2.6s ease-in-out infinite; }
+    @keyframes btnGlow {
+      0%, 100% { box-shadow: 0 4px 18px rgba(0,0,0,.35), 0 0 0 0 rgba(232,200,126,.45); }
+      50% { box-shadow: 0 4px 18px rgba(0,0,0,.35), 0 0 22px 4px rgba(232,200,126,.45); }
+    }
+    /* 扫描提示 */
+    #scanHint {
+      position: fixed; left: 50%; top: 24px; transform: translateX(-50%); z-index: 15; display: none;
+      padding: 8px 18px; border-radius: 999px; font-size: 13.5px; letter-spacing: 1px; white-space: nowrap;
+      color: #fff8ea; background: rgba(30, 22, 14, .55);
+    }
+    /* 信息卡：横排、顶部居中（沿用 v2.2 的定版样式） */
+    #infoCard {
+      position: fixed; left: 50%; top: 16px; z-index: 20;
+      width: min(92vw, 430px); box-sizing: border-box;
+      padding: 12px 16px 13px; border-radius: 10px;
+      opacity: 0; pointer-events: none;
+      background: linear-gradient(180deg, rgba(247,238,220,.96), rgba(238,224,196,.94));
+      color: #3a2c1c; box-shadow: 0 6px 24px rgba(0,0,0,.3), inset 0 0 0 1px rgba(138,109,67,.45);
+      transform: translateX(-50%) translateY(-8px); transition: opacity .5s ease, transform .5s ease;
+    }
+    #infoCard.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    #infoCard .cardHead { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+    #infoCard h2 { margin: 0; font-size: 19px; letter-spacing: 3px; font-weight: 700; }
+    #infoCard .meta { font-size: 11.5px; color: #8a6d43; letter-spacing: 1px; margin: 3px 0 5px; }
+    #infoCard p { margin: 0; font-size: 13px; line-height: 1.65; }
+    #cardClose {
+      flex: none; width: 26px; height: 26px; border-radius: 50%; border: none; cursor: pointer;
+      background: rgba(138,109,67,.18); color: #6b532f; font-size: 15px; line-height: 1; pointer-events: auto;
+    }
+    /* 顺序提示:点错顺序时在上方闪一下 */
+    #orderToast {
+      position: fixed; left: 50%; top: 74px; transform: translateX(-50%); z-index: 25;
+      padding: 8px 18px; border-radius: 999px; font-size: 13.5px; letter-spacing: 1px; white-space: nowrap;
+      color: #fff8ea; background: rgba(122, 82, 40, .92);
+      opacity: 0; pointer-events: none; transition: opacity .3s ease;
+    }
+    #orderToast.show { opacity: 1; }
+    /* 底部栏：进度 + 重播 */
+    #bottomBar {
+      position: fixed; left: 50%; bottom: 30px; transform: translateX(-50%); z-index: 20;
+      display: none; align-items: center; gap: 10px;
+    }
+    #progressPill {
+      padding: 9px 16px; border-radius: 999px; font-size: 13px; letter-spacing: 1px; white-space: nowrap;
+      color: #fff8ea; background: rgba(30, 22, 14, .55);
+    }
+    #replayBtn {
+      padding: 10px 22px; font-size: 14px; letter-spacing: 2px; cursor: pointer;
+      color: #fff8ea; background: rgba(122, 82, 40, .92); border: 1px solid rgba(255,240,200,.5);
+      border-radius: 999px; backdrop-filter: blur(4px); white-space: nowrap;
+    }
+    /* 三个都看完后,进度条变身成这颗金按钮 */
+    #thanksBtn {
+      display: none; padding: 11px 24px; font-size: 14.5px; letter-spacing: 2px; cursor: pointer;
+      color: #2b2118; background: #e8c87e; border: none; border-radius: 999px; font-weight: 600;
+      box-shadow: 0 4px 18px rgba(0,0,0,.35); white-space: nowrap;
+      animation: btnGlow 2.6s ease-in-out infinite;
+    }
+    /* 谢谢观看弹层 */
+    #thanksOverlay {
+      position: fixed; inset: 0; z-index: 40; display: none;
+      align-items: center; justify-content: center; padding: 24px;
+      background: rgba(20, 14, 8, .55); backdrop-filter: blur(3px);
+    }
+    #thanksOverlay.show { display: flex; }
+    .thanksCard {
+      width: min(86vw, 340px); box-sizing: border-box; text-align: center;
+      padding: 26px 22px 22px; border-radius: 12px;
+      background: linear-gradient(180deg, rgba(247,238,220,.98), rgba(238,224,196,.97));
+      color: #3a2c1c; box-shadow: 0 10px 34px rgba(0,0,0,.4), inset 0 0 0 1px rgba(138,109,67,.45);
+      animation: thanksPop .45s ease;
+    }
+    @keyframes thanksPop { from { transform: scale(.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    .thanksCard .seal { margin: 0 auto 12px; width: 40px; height: 40px; font-size: 15px; }
+    .thanksCard h2 {
+      margin: 0 0 8px; font-size: 26px; letter-spacing: 6px; font-weight: 700;
+      font-family: "Songti SC", "STSong", "Noto Serif SC", serif;
+    }
+    .thanksCard p { margin: 0 0 18px; font-size: 13px; line-height: 1.7; color: #6b532f; }
+    #thanksClose {
+      padding: 10px 30px; font-size: 14px; letter-spacing: 2px; cursor: pointer;
+      color: #fff8ea; background: rgba(122, 82, 40, .95); border: none; border-radius: 999px;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="startScreen">
+    <div class="titleRow">
+      <h1>清明上河图 · 虹桥</h1>
+      <div class="seal">虹桥</div>
+    </div>
+    <div class="divider"><span class="lineL"></span>◆<span class="lineR"></span></div>
+    <p>把手机对准虹桥段的图画进行扫描，<br>画会先动起来，停稳之后，<br>点一点画上发光的圆点，听听这三处的故事。</p>
+    <button id="startBtn">开始体验</button>
+    <p style="font-size:13px; opacity:.9; letter-spacing:1px; color:#e8c87e;">v5.7 · 启动加保险：摄像头先开</p>
+    <p style="font-size:11px; opacity:.55; margin-top:-8px;">配乐：“Guzheng City” by Kevin MacLeod（incompetech.com），CC BY 4.0</p>
+  </div>
+
+  <div id="scanHint">请对准虹桥段图画扫描…</div>
+  <div id="orderToast"></div>
+
+  <div id="infoCard">
+    <div class="cardHead">
+      <h2 id="cardTitle">虹桥</h2>
+      <button id="cardClose" aria-label="关闭">×</button>
+    </div>
+    <div class="meta" id="cardMeta"></div>
+    <p id="cardBody"></p>
+  </div>
+
+  <div id="bottomBar">
+    <div id="progressPill">点一点发光的圆点（0 / 3）</div>
+    <button id="thanksBtn">三个地方都看完啦 · 点这里</button>
+    <button id="replayBtn">重播视频</button>
+  </div>
+
+  <div id="thanksOverlay">
+    <div class="thanksCard">
+      <div class="seal">虹桥</div>
+      <h2>谢谢观看</h2>
+      <p>《清明上河图 · 虹桥》互动导览到此结束<br>愿你在画里，再多停留一会儿</p>
+      <button id="thanksClose">再逛一逛</button>
+    </div>
+  </div>
+
+  <!-- 配乐：只认 audio/bgm.mp3 这一个文件名，想换曲子就拿新文件同名替换 -->
+  <audio id="bgm" src="./audio/bgm.mp3" loop preload="auto"></audio>
+  <!-- 三段解说：点热点时播放，文件在 audio 文件夹 -->
+  <audio id="aud-bridge" src="./audio/narration_bridge.mp3" preload="auto"></audio>
+  <audio id="aud-ship" src="./audio/narration_ship.mp3" preload="auto"></audio>
+  <audio id="aud-market" src="./audio/narration_market.mp3" preload="auto"></audio>
+
+  <a-scene
+    mindar-image="imageTargetSrc: ./targets.mind; autoStart: false; uiLoading: no; uiScanning: no; filterMinCF: 0.001; filterBeta: 0.01;"
+    color-space="sRGB"
+    renderer="colorManagement: true; physicallyCorrectLights: true"
+    vr-mode-ui="enabled: false"
+    device-orientation-permission-ui="enabled: false">
+
+    <a-assets>
+      <video id="introVideo" src="./intro_video.mp4" preload="auto" playsinline webkit-playsinline crossorigin="anonymous"></video>
+      <img id="freezeImg" src="./freeze_frame.jpg">
+    </a-assets>
+
+    <a-camera id="camera" position="0 0 0" look-controls="enabled: false"></a-camera>
+
+    <a-entity id="target" mindar-image-target="targetIndex: 0">
+      <!-- 视频层与定格层：同位置同大小（按高对齐识别图：宽 1.147 × 高 0.641），切换时不跳 -->
+      <a-video id="videoPlane" src="#introVideo" width="1.147" height="0.641" position="0 0 0.006" visible="false"></a-video>
+      <a-plane id="freezePlane" src="#freezeImg" width="1.147" height="0.641" position="0 0 0.007" visible="false"></a-plane>
+
+      <!-- 热点层：定格后显示。圆点本体小，金色光圈呼吸；透明球才是真正能点的范围 -->
+      <a-entity id="hotspotGroup" visible="false">
+        <a-entity class="hsRoot" id="root-bridge" position="0.057 0.090 0.012">
+          <a-ring class="hsRing" radius-inner="0.010" radius-outer="0.0155" material="color: #ffd76a; transparent: true; opacity: 0.95; side: double"
+                  animation="property: scale; from: 1 1 1; to: 1.35 1.35 1; dur: 900; dir: alternate; loop: true; easing: easeInOutSine"></a-ring>
+          <a-circle class="hsDot" radius="0.0055" material="color: #ffd76a; transparent: true; opacity: 1"></a-circle>
+          <a-circle class="hsBadge" radius="0.0125" position="0.027 0.027 0.002" material="color: #3a2a16; transparent: true; opacity: 0.88"></a-circle>
+          <a-text class="hsNum" value="1" position="0.027 0.0275 0.004" align="center" width="0.05" color="#ffd76a"></a-text>
+          <a-sphere class="hsHit" data-hs="bridge" radius="0.06" material="color: #FFFFFF; opacity: 0.001; transparent: true; depthWrite: false"></a-sphere>
+        </a-entity>
+        <a-entity class="hsRoot" id="root-ship" position="0.367 -0.051 0.012">
+          <a-ring class="hsRing" radius-inner="0.010" radius-outer="0.0155" material="color: #ffd76a; transparent: true; opacity: 0.95; side: double"
+                  animation="property: scale; from: 1 1 1; to: 1.35 1.35 1; dur: 900; dir: alternate; loop: true; easing: easeInOutSine"></a-ring>
+          <a-circle class="hsDot" radius="0.0055" material="color: #ffd76a; transparent: true; opacity: 1"></a-circle>
+          <a-circle class="hsBadge" radius="0.0125" position="0.027 0.027 0.002" material="color: #3a2a16; transparent: true; opacity: 0.88"></a-circle>
+          <a-text class="hsNum" value="2" position="0.027 0.0275 0.004" align="center" width="0.05" color="#ffd76a"></a-text>
+          <a-sphere class="hsHit" data-hs="ship" radius="0.06" material="color: #FFFFFF; opacity: 0.001; transparent: true; depthWrite: false"></a-sphere>
+        </a-entity>
+        <a-entity class="hsRoot" id="root-market" position="-0.459 -0.077 0.012">
+          <a-ring class="hsRing" radius-inner="0.010" radius-outer="0.0155" material="color: #ffd76a; transparent: true; opacity: 0.95; side: double"
+                  animation="property: scale; from: 1 1 1; to: 1.35 1.35 1; dur: 900; dir: alternate; loop: true; easing: easeInOutSine"></a-ring>
+          <a-circle class="hsDot" radius="0.0055" material="color: #ffd76a; transparent: true; opacity: 1"></a-circle>
+          <a-circle class="hsBadge" radius="0.0125" position="0.027 0.027 0.002" material="color: #3a2a16; transparent: true; opacity: 0.88"></a-circle>
+          <a-text class="hsNum" value="3" position="0.027 0.0275 0.004" align="center" width="0.05" color="#ffd76a"></a-text>
+          <a-sphere class="hsHit" data-hs="market" radius="0.06" material="color: #FFFFFF; opacity: 0.001; transparent: true; depthWrite: false"></a-sphere>
+        </a-entity>
+      </a-entity>
+    </a-entity>
+  </a-scene>
+
+  <script>
+    /* =========================================================
+       参数速查（自己调效果时主要改这里，先看懂再动手）
+
+       1. 跟踪平滑（在上方 a-scene 的 mindar-image 里）
+          filterMinCF: 0.001 / filterBeta: 0.01（沿用已调好的数值）
+          画面抖 → filterBeta 往小调；跟不上手 → 往大调。
+
+       2. 视频层 / 定格层大小：宽 1.147 × 高 0.641
+          = 按「高」与识别图（高 0.6407）对齐，宽按视频比例 1.79
+          算出。换视频先看新视频的宽高比，再重算这两个数。
+
+       3. 热点位置（hotspotGroup 里三个 hsRoot 的 position）
+          坐标按定格图量好：虹桥 (0.057, 0.090)｜大船 (0.367, -0.051)
+          ｜市集 (-0.459, -0.077)；第三个数 0.012 是离画面的高度，别改小，
+          小于视频层的 0.006 / 定格层的 0.007 会被盖住。
+          能点的范围是 hsHit 的 radius 0.06（透明球，照老师示例的做法），嫌难点就调大。
+
+       4. 流程靠四个状态标记管理（借鉴霸王龙代码）：
+          phase: idle 未开始 / scanning 等扫描 / playing 播视频 / frozen 已定格
+          targetVisible 识别图在不在镜头内；openCard 现在开着哪张卡；
+          viewed 三个热点各看没看过。Target 丢失时暂停一切、收起卡片，
+          重新识别时按 phase 与 openCard 恢复，不从头来。
+
+       5. 配乐：文件固定为 audio/bgm.mp3，换曲子 = 换这个文件、名字别动。
+          启动时机（v5.5 定版）：点中第一个热点才开始播，之前全程安静。
+          音量 BGM_VOL = 0.2；解说响起时降到 BGM_DUCK_VOL = 0.07，
+          解说完或关卡后恢复。识别图移出画面时配乐也暂停。
+
+       6. 收尾（v5.3）：三个热点都看完，底部进度条会变成金色按钮，
+          点它弹出「谢谢观看」卡（thanksOverlay），点「再逛一逛」关掉。
+          解说只许从 openHotspot 播，别在别处调 aud-* 的 play()。
+
+       7. 导览顺序（v5.6）：ORDER = 虹桥 → 大船 → 市集，热点右上角有
+          数字徽章；没轮到的先变暗、点它只弹提示不打开，看过的可回看。
+    ========================================================= */
+
+    /* 导览顺序（定版）：1 虹桥 → 2 大船过桥 → 3 桥头市集。
+       想改顺序就改这一行数组，徽章上的数字是写死在场景里的，记得一起改。 */
+    const ORDER = ['bridge', 'ship', 'market'];
+
+    /* 热点内容：标题、出处一行、正文（= 解说词，卡和录音同一份） */
+    const HOTSPOTS = {
+      bridge: {
+        title: '虹桥',
+        meta: '北宋 · 张择端《清明上河图》｜虹桥段',
+        body: '先看这座桥。虹桥是一座木头搭成的大拱桥，桥下没有桥墩，整道拱一跨过河，大船才过得去。桥面弯得像一道彩虹，所以叫虹桥。桥上的人和桥下的船，挤在同一段画面里，这也是全卷最热闹的地方。'
+      },
+      ship: {
+        title: '大船过桥',
+        meta: '北宋 · 张择端《清明上河图》｜虹桥段',
+        body: '桥下这艘大船，正要穿过桥洞。船身高，桅杆得先放倒，船工们有人撑篙，有人拉绳，桥上还有人探出身子，大声招呼。只差一点，船就会撞上桥身。画家画下来的，正是这最紧张的一下子。'
+      },
+      market: {
+        title: '桥头市集',
+        meta: '北宋 · 张择端《清明上河图》｜虹桥段',
+        body: '再看桥头这一片。摊棚一个挨着一个，卖吃食的、挑担子的、牵驴的，都在这里。汴河把各地的粮食和货物运进城，船一到岸，桥头就成了买卖最集中的地方。画里的这份热闹，靠的就是这条河。'
+      }
+    };
+
+    const sceneEl = document.querySelector('a-scene');
+    const startScreen = document.getElementById('startScreen');
+    const scanHint = document.getElementById('scanHint');
+    const infoCard = document.getElementById('infoCard');
+    const cardTitle = document.getElementById('cardTitle');
+    const cardMeta = document.getElementById('cardMeta');
+    const cardBody = document.getElementById('cardBody');
+    const bottomBar = document.getElementById('bottomBar');
+    const progressPill = document.getElementById('progressPill');
+    const thanksBtn = document.getElementById('thanksBtn');
+    const thanksOverlay = document.getElementById('thanksOverlay');
+    const orderToast = document.getElementById('orderToast');
+    let toastTimer = null;
+    function showOrderToast(text) {
+      orderToast.textContent = text;
+      orderToast.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => orderToast.classList.remove('show'), 1700);
+    }
+    /* 按顺序点亮：下一个要看的热点全亮，还没轮到的先变暗，看过的保持（已变绿） */
+    function refreshHotspotStates() {
+      const nextIdx = ORDER.filter(k => viewed[k]).length;
+      ORDER.forEach((key, i) => {
+        const root = document.getElementById('root-' + key);
+        if (!root) return;
+        const dim = !viewed[key] && i > nextIdx;
+        root.querySelector('.hsRing').setAttribute('material', 'opacity', dim ? 0.3 : 0.95);
+        root.querySelector('.hsDot').setAttribute('material', 'opacity', dim ? 0.3 : 1);
+        root.querySelector('.hsBadge').setAttribute('material', 'opacity', dim ? 0.35 : 0.88);
+        root.querySelector('.hsNum').setAttribute('opacity', dim ? 0.35 : 1);
+      });
+    }
+    const targetEl = document.getElementById('target');
+    const videoEl = document.getElementById('introVideo');
+    const videoPlane = document.getElementById('videoPlane');
+    const freezePlane = document.getElementById('freezePlane');
+    const hotspotGroup = document.getElementById('hotspotGroup');
+    const bgm = document.getElementById('bgm');
+    const BGM_VOL = 0.2;        /* 配乐平时音量 */
+    const BGM_DUCK_VOL = 0.07;  /* 解说播放时配乐降到的音量 */
+    let bgmStarted = false;
+
+    /* 体验状态 */
+    let phase = 'idle';           // idle / scanning / playing / frozen
+    let targetVisible = false;
+    let openCard = null;          // 现在打开的热点 id，null = 没开卡
+    const viewed = { bridge: false, ship: false, market: false };
+
+    function stopAllAudio() {
+      ['bridge', 'ship', 'market'].forEach(id => {
+        const a = document.getElementById('aud-' + id);
+        a.pause();
+      });
+    }
+
+    /* 点「开始体验」时只预热视频（它要在扫到图时自动带声播放，必须先解锁）。
+       三段解说【不做预播】：v5.3 修的 bug 就是预播时静音没压住、一开扫解说自己开口。
+       解说只做 load() 预载，它第一次真正播放是在点热点时——那一下点按本身就是
+       用户手势，浏览器允许出声，用不着预播。总闸：解说只许从 openHotspot 里播。 */
+    async function primeMedia() {
+      const unlock = (async () => {
+        try {
+          videoEl.muted = true;
+          await videoEl.play();
+          videoEl.pause();
+          videoEl.currentTime = 0;
+        } catch (e) { /* 解锁失败不拦流程，播放时再兜底 */ }
+        finally { videoEl.muted = false; }
+      })();
+      /* 最多等 1.5 秒：play() 在个别手机上会一直挂起，绝不能让它拖住开摄像头 */
+      await Promise.race([unlock, new Promise(r => setTimeout(r, 1500))]);
+      ['bridge', 'ship', 'market'].forEach(id => {
+        try { document.getElementById('aud-' + id).load(); } catch (e) {}
+      });
+    }
+
+    document.getElementById('startBtn').addEventListener('click', async () => {
+      /* 配乐不在这里放：按定版流程，它要等观众点中第一个热点才开始。 */
+      startScreen.style.display = 'none';
+      scanHint.style.display = 'block';
+      scanHint.textContent = '正在打开摄像头…如弹出询问请点「允许」';
+      phase = 'scanning';
+      /* v5.7 启动保险：摄像头第一时间就开（权限询问立刻弹），视频预热同时在后台跑，
+         谁也不等谁。旧顺序是先预热再开摄像头，预热在手机上一卡住，就成了
+         「不问权限 + 白屏」。开失败也不再白屏装死，把原因写在提示条上。 */
+      const priming = primeMedia();
+      try {
+        await sceneEl.systems['mindar-image-system'].start();
+        scanHint.textContent = '请对准虹桥段图画扫描…';
+      } catch (e) {
+        scanHint.textContent = '摄像头没打开：多半是相机权限被拒了，去浏览器设置里允许后刷新重试';
+      }
+      await priming;
+    });
+
+    function playVideo() {
+      phase = 'playing';
+      freezePlane.setAttribute('visible', 'false');
+      hotspotGroup.setAttribute('visible', 'false');
+      videoPlane.setAttribute('visible', 'true');
+      videoEl.play().catch(() => {
+        /* 带声音播放被拦时，退回静音播放，画面先动起来 */
+        videoEl.muted = true;
+        videoEl.play();
+      });
+    }
+
+    /* 视频播完 → 定格：换上最后一帧截图，热点淡入 */
+    videoEl.addEventListener('ended', () => {
+      phase = 'frozen';
+      videoPlane.setAttribute('visible', 'false');
+      freezePlane.setAttribute('visible', 'true');
+      hotspotGroup.setAttribute('visible', 'true');
+      bottomBar.style.display = 'flex';
+      refreshHotspotStates();
+      updateProgress();
+    });
+
+    targetEl.addEventListener('targetFound', () => {
+      targetVisible = true;
+      scanHint.style.display = 'none';
+      if (bgmStarted && bgm.paused) { bgm.volume = openCard ? BGM_DUCK_VOL : BGM_VOL; bgm.play().catch(() => {}); }
+      if (phase === 'scanning') playVideo();
+      else if (phase === 'playing' && videoEl.paused && !videoEl.ended) videoEl.play().catch(() => {});
+      else if (phase === 'frozen' && openCard) infoCard.classList.add('show');
+    });
+
+    targetEl.addEventListener('targetLost', () => {
+      targetVisible = false;
+      scanHint.style.display = 'block';
+      if (phase === 'playing') videoEl.pause();
+      stopAllAudio();
+      bgm.pause();
+      thanksOverlay.classList.remove('show');
+      /* 卡片先收起，重新扫到时按 openCard 恢复（音频不自动续播，点热点再听） */
+      infoCard.classList.remove('show');
+    });
+
+    /* 点热点：照老师示例（index_6_animal_hotspots）的方法——
+       不用 click 事件，改在 document 的 pointerup 上判断：
+       手指按下到抬起移动不超过 8px 才算「轻点」，再用 THREE.Raycaster
+       从点的位置打射线，收集三个透明点击球里真正的 Mesh 来比对。
+       能点中的是透明球（半径 0.06 的球体），不是平面圆——
+       球有体积，从侧面点也判得到。 */
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+    const cameraEl = document.getElementById('camera');
+    const hitEls = Array.from(document.querySelectorAll('.hsHit'));
+
+    function hitTestHotspot(clientX, clientY) {
+      if (phase !== 'frozen' || !targetVisible) return;
+      const canvas = sceneEl.canvas;
+      const threeCamera = cameraEl.getObject3D('camera');
+      if (!canvas || !threeCamera) return;
+      const rect = canvas.getBoundingClientRect();
+      pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+      pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(pointer, threeCamera);
+      const hitMeshes = [];
+      const ownerMap = new Map();
+      hitEls.forEach((el) => {
+        el.object3D.traverse((object) => {
+          if (object.isMesh) {
+            hitMeshes.push(object);
+            ownerMap.set(object.uuid, el);
+          }
+        });
+      });
+      const hits = raycaster.intersectObjects(hitMeshes, false);
+      if (hits.length) {
+        const el = ownerMap.get(hits[0].object.uuid);
+        if (el) openHotspot(el.dataset.hs);
+      }
+    }
+
+    /* TAP_THRESHOLD = 8px：移动超过这个数算拖动，不算点击（老师示例同款） */
+    const TAP_THRESHOLD = 8;
+    let downInfo = null;
+    document.addEventListener('pointerdown', (ev) => {
+      if (ev.target.closest && ev.target.closest('#startScreen, #infoCard, #bottomBar, #thanksOverlay')) {
+        downInfo = null;
+        return;
+      }
+      downInfo = { x: ev.clientX, y: ev.clientY, id: ev.pointerId };
+    });
+    document.addEventListener('pointerup', (ev) => {
+      if (!downInfo || ev.pointerId !== downInfo.id) return;
+      const moved = Math.hypot(ev.clientX - downInfo.x, ev.clientY - downInfo.y);
+      downInfo = null;
+      if (moved <= TAP_THRESHOLD) hitTestHotspot(ev.clientX, ev.clientY);
+    });
+    document.addEventListener('pointercancel', () => { downInfo = null; });
+
+    let lastOpenId = null;
+    let lastOpenAt = 0;
+    function openHotspot(id) {
+      const data = HOTSPOTS[id];
+      if (!data) return;
+      /* 顺序闸门：还没轮到的热点先不让看，弹一句提示领他去正确的那个；
+         已经看过的随时可以重点回看，不受闸门限制。 */
+      const nextIdx = ORDER.filter(k => viewed[k]).length;
+      if (!viewed[id] && ORDER.indexOf(id) !== nextIdx) {
+        const want = ORDER[nextIdx];
+        showOrderToast('按顺序来：先看第 ' + (nextIdx + 1) + ' 个光点 · ' + HOTSPOTS[want].title);
+        return;
+      }
+      /* 同一下点按在手机上会先后触发 touchend 和 click，0.8 秒内重复打开同一个热点就忽略，免得解说重头播 */
+      const now = Date.now();
+      if (lastOpenId === id && now - lastOpenAt < 800) return;
+      lastOpenId = id;
+      lastOpenAt = now;
+      openCard = id;
+      cardTitle.textContent = '第' + (ORDER.indexOf(id) + 1) + '站 · ' + data.title;
+      cardMeta.textContent = data.meta;
+      cardBody.textContent = data.body;
+      infoCard.classList.add('show');
+      stopAllAudio();
+      bgm.volume = BGM_DUCK_VOL;
+      if (!bgmStarted) {
+        /* 全程第一次点中热点，配乐从这一刻才开始（点按是用户手势，浏览器放行出声）；
+           此刻解说正在播，所以先用压低后的音量起，解说完 onended 会把它升回 BGM_VOL。 */
+        bgm.play().then(() => { bgmStarted = true; }).catch(() => {});
+      }
+      const audio = document.getElementById('aud-' + id);
+      audio.onended = () => { if (openCard === id) bgm.volume = BGM_VOL; };
+      audio.currentTime = 0;
+      audio.play().catch(() => {});
+      if (!viewed[id]) {
+        viewed[id] = true;
+        /* 看过的热点变绿：光圈和圆点都换色 */
+        const root = document.getElementById('root-' + id);
+        root.querySelector('.hsRing').setAttribute('material', 'color', '#8fd07a');
+        root.querySelector('.hsDot').setAttribute('material', 'color', '#8fd07a');
+        root.querySelector('.hsBadge').setAttribute('material', 'color', '#3f7031');
+      }
+      refreshHotspotStates();
+      updateProgress();
+    }
+
+    function updateProgress() {
+      const n = Object.values(viewed).filter(Boolean).length;
+      if (n >= 3) {
+        /* 都看完了：进度条收起，换成金色收尾按钮 */
+        progressPill.style.display = 'none';
+        thanksBtn.style.display = 'block';
+      } else {
+        progressPill.style.display = 'block';
+        thanksBtn.style.display = 'none';
+        const want = ORDER[n];
+        progressPill.textContent = '第 ' + (n + 1) + ' 站：点光点 ' + (n + 1) + ' · ' + HOTSPOTS[want].title + '（' + n + ' / 3）';
+      }
+    }
+
+    /* 点收尾按钮 → 蹦出「谢谢观看」 */
+    thanksBtn.addEventListener('click', () => {
+      infoCard.classList.remove('show');
+      stopAllAudio();
+      bgm.volume = BGM_VOL;
+      openCard = null;
+      thanksOverlay.classList.add('show');
+    });
+    document.getElementById('thanksClose').addEventListener('click', () => {
+      thanksOverlay.classList.remove('show');
+    });
+
+    document.getElementById('cardClose').addEventListener('click', () => {
+      infoCard.classList.remove('show');
+      stopAllAudio();
+      bgm.volume = BGM_VOL;
+      openCard = null;
+    });
+
+    document.getElementById('replayBtn').addEventListener('click', () => {
+      infoCard.classList.remove('show');
+      thanksOverlay.classList.remove('show');
+      stopAllAudio();
+      bgm.volume = BGM_VOL;
+      openCard = null;
+      bottomBar.style.display = 'none';
+      videoEl.currentTime = 0;
+      if (targetVisible) playVideo();
+      else { phase = 'scanning'; scanHint.style.display = 'block'; }
+    });
+  </script>
+</body>
+</html>
