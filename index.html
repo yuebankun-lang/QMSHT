@@ -156,7 +156,7 @@
     <div class="divider"><span class="lineL"></span>◆<span class="lineR"></span></div>
     <p>把手机对准虹桥段的图画进行扫描，<br>画会先动起来，停稳之后，<br>点一点画上发光的圆点，听听这三处的故事。</p>
     <button id="startBtn">开始体验</button>
-    <p style="font-size:13px; opacity:.9; letter-spacing:1px; color:#e8c87e;">v5.7 · 启动加保险：摄像头先开</p>
+    <p style="font-size:13px; opacity:.9; letter-spacing:1px; color:#e8c87e;">v5.8 · 回退媒体预热到老做法</p>
     <p style="font-size:11px; opacity:.55; margin-top:-8px;">配乐：“Guzheng City” by Kevin MacLeod（incompetech.com），CC BY 4.0</p>
   </div>
 
@@ -358,25 +358,24 @@
       });
     }
 
-    /* 点「开始体验」时只预热视频（它要在扫到图时自动带声播放，必须先解锁）。
-       三段解说【不做预播】：v5.3 修的 bug 就是预播时静音没压住、一开扫解说自己开口。
-       解说只做 load() 预载，它第一次真正播放是在点热点时——那一下点按本身就是
-       用户手势，浏览器允许出声，用不着预播。总闸：解说只许从 openHotspot 里播。 */
+    /* 媒体预热（v5.8 回退版）：回到 5.3 之前一直能跑通的老做法——视频与配乐先静音
+       播一下再暂停（顺带把音量压到 0，双保险），借这一下完成手机浏览器的播放解锁；
+       三段解说仍只加载不播放（5.3 的规矩），它们第一次出声是在点热点的手势里，不会漏播。 */
     async function primeMedia() {
-      const unlock = (async () => {
+      cardData.forEach((d) => { try { d.audioEl.load(); } catch (e) {} });
+      const jobs = [videoEl, bgm];
+      for (const el of jobs) {
+        const wasMuted = el.muted;
+        const wasVol = el.volume;
+        el.muted = true;
+        el.volume = 0;
         try {
-          videoEl.muted = true;
-          await videoEl.play();
-          videoEl.pause();
-          videoEl.currentTime = 0;
-        } catch (e) { /* 解锁失败不拦流程，播放时再兜底 */ }
-        finally { videoEl.muted = false; }
-      })();
-      /* 最多等 1.5 秒：play() 在个别手机上会一直挂起，绝不能让它拖住开摄像头 */
-      await Promise.race([unlock, new Promise(r => setTimeout(r, 1500))]);
-      ['bridge', 'ship', 'market'].forEach(id => {
-        try { document.getElementById('aud-' + id).load(); } catch (e) {}
-      });
+          await el.play();
+          el.pause();
+          el.currentTime = 0;
+        } catch (e) { /* 不支持就跳过，不影响主流程 */ }
+        finally { el.muted = wasMuted; el.volume = wasVol; }
+      }
     }
 
     document.getElementById('startBtn').addEventListener('click', async () => {
