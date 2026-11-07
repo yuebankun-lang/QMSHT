@@ -144,6 +144,18 @@
       padding: 10px 30px; font-size: 14px; letter-spacing: 2px; cursor: pointer;
       color: #fff8ea; background: rgba(122, 82, 40, .95); border: none; border-radius: 999px;
     }
+
+    /* 相机图层修复（v5.9，diag3 实验C 实测有效）：MindAR 把相机画面放在 z=-2，
+       在用户手机上会被页面背景盖住（相机在跑、画面看不见）。钉死图层：
+       相机画面 z=1 铺满（cover 裁切，与 MindAR 自己的居中算法等效，追踪对位不受影响），
+       A-Frame 画布 z=2 浮在其上（画布清屏透明度本来就是 0）。 */
+    body > video:not(#introVideo) {
+      position: fixed !important; left: 0 !important; top: 0 !important;
+      width: 100% !important; height: 100% !important;
+      object-fit: cover !important; transform: none !important;
+      z-index: 1 !important;
+    }
+    .a-canvas { position: fixed !important; inset: 0 !important; z-index: 2 !important; }
   </style>
 </head>
 <body>
@@ -156,7 +168,7 @@
     <div class="divider"><span class="lineL"></span>◆<span class="lineR"></span></div>
     <p>把手机对准虹桥段的图画进行扫描，<br>画会先动起来，停稳之后，<br>点一点画上发光的圆点，听听这三处的故事。</p>
     <button id="startBtn">开始体验</button>
-    <p style="font-size:13px; opacity:.9; letter-spacing:1px; color:#e8c87e;">v5.8 · 回退媒体预热到老做法</p>
+    <p style="font-size:13px; opacity:.9; letter-spacing:1px; color:#e8c87e;">v5.9 · 相机图层修复</p>
     <p style="font-size:11px; opacity:.55; margin-top:-8px;">配乐：“Guzheng City” by Kevin MacLeod（incompetech.com），CC BY 4.0</p>
   </div>
 
@@ -378,6 +390,29 @@
       }
     }
 
+    /* 相机图层修复（v5.9）：样式表已用 !important 钉住图层，这里再用 JS 补一遍，
+       双保险；窗口尺寸变化（旋转屏幕等）时也重钉一次。 */
+    function fixCameraLayer() {
+      document.querySelectorAll('body > video').forEach((v) => {
+        if (v.id === 'introVideo') return;
+        v.style.setProperty('position', 'fixed', 'important');
+        v.style.setProperty('left', '0', 'important');
+        v.style.setProperty('top', '0', 'important');
+        v.style.setProperty('width', '100%', 'important');
+        v.style.setProperty('height', '100%', 'important');
+        v.style.setProperty('object-fit', 'cover', 'important');
+        v.style.setProperty('transform', 'none', 'important');
+        v.style.setProperty('z-index', '1', 'important');
+      });
+      const c = sceneEl.canvas;
+      if (c) {
+        c.style.setProperty('position', 'fixed', 'important');
+        c.style.setProperty('inset', '0', 'important');
+        c.style.setProperty('z-index', '2', 'important');
+      }
+    }
+    window.addEventListener('resize', fixCameraLayer);
+
     document.getElementById('startBtn').addEventListener('click', async () => {
       /* 配乐不在这里放：按定版流程，它要等观众点中第一个热点才开始。 */
       startScreen.style.display = 'none';
@@ -390,6 +425,8 @@
       const priming = primeMedia();
       try {
         await sceneEl.systems['mindar-image-system'].start();
+        fixCameraLayer();
+        setTimeout(fixCameraLayer, 1500);
         scanHint.textContent = '请对准虹桥段图画扫描…';
       } catch (e) {
         scanHint.textContent = '摄像头没打开：多半是相机权限被拒了，去浏览器设置里允许后刷新重试';
