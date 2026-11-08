@@ -172,7 +172,7 @@
     <div class="divider"><span class="lineL"></span>◆<span class="lineR"></span></div>
     <p>把手机对准虹桥段的图画进行扫描，<br>画会先动起来，停稳之后，<br>点一点画上发光的圆点，听听这三处的故事。</p>
     <button id="startBtn">开始体验</button>
-    <p style="font-size:13px; opacity:.9; letter-spacing:1px; color:#e8c87e;">v5.12 · 启动隔离诊断</p>
+    <p style="font-size:13px; opacity:.9; letter-spacing:1px; color:#e8c87e;">v5.14 · 启动提速＋就绪门</p>
     <p style="font-size:11px; opacity:.55; margin-top:-8px;">配乐：“Guzheng City” by Kevin MacLeod（incompetech.com），CC BY 4.0</p>
   </div>
 
@@ -210,6 +210,11 @@
   <audio id="aud-ship" src="./audio/narration_ship.mp3" preload="auto"></audio>
   <audio id="aud-market" src="./audio/narration_market.mp3" preload="auto"></audio>
 
+  <!-- v5.14：片头视频移出 a-assets——它蹲在素材区里会拖住场景初始化
+       （iOS 对视频预加载最磨蹭），是启动竞态的源头之一。
+       a-video 按 id 找它，跟放在哪无关，纹理照常工作。 -->
+  <video id="introVideo" src="./intro_video.mp4" preload="auto" playsinline webkit-playsinline crossorigin="anonymous" style="display:none"></video>
+
   <a-scene
     mindar-image="imageTargetSrc: ./targets.mind; autoStart: false; uiLoading: no; uiScanning: no; filterMinCF: 0.001; filterBeta: 0.01;"
     color-space="sRGB"
@@ -218,7 +223,6 @@
     device-orientation-permission-ui="enabled: false">
 
     <a-assets>
-      <video id="introVideo" src="./intro_video.mp4" preload="auto" playsinline webkit-playsinline crossorigin="anonymous"></video>
       <img id="freezeImg" src="./freeze_frame.jpg">
     </a-assets>
 
@@ -424,7 +428,28 @@
     new MutationObserver(() => { if (layerFixArmed) fixCameraLayer(); }).observe(document.body, { childList: true, subtree: true });
     sceneEl.addEventListener('arReady', fixCameraLayer);
 
-    document.getElementById('startBtn').addEventListener('click', async () => {
+    /* v5.14 就绪门：MindAR 组件没初始化完（sys.ui 还没建好）之前，开始
+       按钮先禁用、显示「正在准备…」，就绪后自动放行。配合点开始后
+       start() 前的等待轮询（v5.13），从两头堵死时序竞态。等满 12 秒
+       仍没就绪也放行，让启动的报错通道把真因亮出来，不留死按钮。 */
+    const startBtn = document.getElementById('startBtn');
+    const startBtnLabel = startBtn.textContent;
+    const gateT0 = Date.now();
+    startBtn.disabled = true;
+    startBtn.style.opacity = '0.55';
+    startBtn.textContent = '正在准备…';
+    (function armStartButton() {
+      const sys = sceneEl.systems && sceneEl.systems['mindar-image-system'];
+      if ((sys && sys.ui) || Date.now() - gateT0 > 12000) {
+        startBtn.disabled = false;
+        startBtn.style.opacity = '';
+        startBtn.textContent = startBtnLabel;
+      } else {
+        setTimeout(armStartButton, 150);
+      }
+    })();
+
+    startBtn.addEventListener('click', async () => {
       if (phase !== 'idle') return;   /* 防连点：start() 重入可能直接抛错 */
       /* 配乐不在这里放：按定版流程，它要等观众点中第一个热点才开始。 */
       startScreen.style.display = 'none';
@@ -440,8 +465,22 @@
          启动路径并自带保护：就算它出错，也不许冒充「摄像头没打开」。 */
       let started = false;
       try {
-        await sceneEl.systems['mindar-image-system'].start();
-        started = true;
+        /* v5.13：先等 MindAR 组件初始化完成再 start。v5.12 实测错误是
+           「undefined is not an object (evaluating 'this.ui.showLoading')」——
+           ui 要等组件 init 调 setup() 时才建；点开始时 init 还没跑完
+           （iOS 上场景初始化慢），start() 就会撞这个错。等 ui 出现，
+           最多 8 秒；超时给专属提示，与启动本身失败区分开。 */
+        const sys = sceneEl.systems['mindar-image-system'];
+        const t0 = Date.now();
+        while (!sys.ui && Date.now() - t0 < 8000) {
+          await new Promise((r) => setTimeout(r, 100));
+        }
+        if (!sys.ui) {
+          scanHint.textContent = '等了 8 秒 AR 组件还没初始化好——刷新页面，在开始界面多停几秒再点开始；还不行把这行字发我';
+        } else {
+          await sys.start();
+          started = true;
+        }
       } catch (e) {
         scanHint.textContent = '摄像头没打开（' + (e && e.name ? e.name : '未知') + '：' + (e && e.message ? e.message : '无详情') + '）——把这行字截图发我';
       }
