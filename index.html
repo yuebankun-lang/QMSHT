@@ -145,14 +145,18 @@
       color: #fff8ea; background: rgba(122, 82, 40, .95); border: none; border-radius: 999px;
     }
 
-    /* 相机图层修复（v5.9，diag3 实验C 实测有效）：MindAR 把相机画面放在 z=-2，
+    /* 相机图层修复（v5.10，源头是 diag3 实验C）：MindAR 把相机画面放在 z=-2，
        在用户手机上会被页面背景盖住（相机在跑、画面看不见）。钉死图层：
-       相机画面 z=1 铺满（cover 裁切，与 MindAR 自己的居中算法等效，追踪对位不受影响），
-       A-Frame 画布 z=2 浮在其上（画布清屏透明度本来就是 0）。 */
-    body > video:not(#introVideo) {
+       相机画面 z=1 铺满（cover 裁切，追踪对位不受影响），画布 z=2 浮在其上。
+       v5.10 针对 iPhone 加固：选择器不再假设相机画面挂在 body 正下方
+       （MindAR 源码证实它挂在场景的父节点下，层级一深 body > video 就够不着，
+       v5.9 在安卓上好了、iPhone 没好，疑似就是没够着）；
+       再加 translateZ(0)，逼 iOS Safari 给相机画面单独一层。 */
+    video:not(#introVideo) {
       position: fixed !important; left: 0 !important; top: 0 !important;
       width: 100% !important; height: 100% !important;
-      object-fit: cover !important; transform: none !important;
+      object-fit: cover !important;
+      transform: translateZ(0) !important; -webkit-transform: translateZ(0) !important;
       z-index: 1 !important;
     }
     .a-canvas { position: fixed !important; inset: 0 !important; z-index: 2 !important; }
@@ -168,7 +172,7 @@
     <div class="divider"><span class="lineL"></span>◆<span class="lineR"></span></div>
     <p>把手机对准虹桥段的图画进行扫描，<br>画会先动起来，停稳之后，<br>点一点画上发光的圆点，听听这三处的故事。</p>
     <button id="startBtn">开始体验</button>
-    <p style="font-size:13px; opacity:.9; letter-spacing:1px; color:#e8c87e;">v5.9 · 相机图层修复</p>
+    <p style="font-size:13px; opacity:.9; letter-spacing:1px; color:#e8c87e;">v5.10 · iPhone 图层加固</p>
     <p style="font-size:11px; opacity:.55; margin-top:-8px;">配乐：“Guzheng City” by Kevin MacLeod（incompetech.com），CC BY 4.0</p>
   </div>
 
@@ -390,10 +394,12 @@
       }
     }
 
-    /* 相机图层修复（v5.9）：样式表已用 !important 钉住图层，这里再用 JS 补一遍，
-       双保险；窗口尺寸变化（旋转屏幕等）时也重钉一次。 */
+    /* 相机图层修复（v5.10）：JS 再补钉一遍。找相机画面改用 diag3 实测
+       有效的找法（全部 video 里排除片头视频），不再假设它挂在哪一层；
+       另守株待兔：MindAR 什么时候把相机画面插进页面，就当场钉住，
+       arReady 时也补钉一次，并把画布清屏设成全透明（同实验C）。 */
     function fixCameraLayer() {
-      document.querySelectorAll('body > video').forEach((v) => {
+      document.querySelectorAll('video').forEach((v) => {
         if (v.id === 'introVideo') return;
         v.style.setProperty('position', 'fixed', 'important');
         v.style.setProperty('left', '0', 'important');
@@ -401,7 +407,8 @@
         v.style.setProperty('width', '100%', 'important');
         v.style.setProperty('height', '100%', 'important');
         v.style.setProperty('object-fit', 'cover', 'important');
-        v.style.setProperty('transform', 'none', 'important');
+        v.style.setProperty('transform', 'translateZ(0)', 'important');
+        v.style.setProperty('-webkit-transform', 'translateZ(0)', 'important');
         v.style.setProperty('z-index', '1', 'important');
       });
       const c = sceneEl.canvas;
@@ -410,8 +417,11 @@
         c.style.setProperty('inset', '0', 'important');
         c.style.setProperty('z-index', '2', 'important');
       }
+      try { sceneEl.renderer.setClearColor(0x000000, 0); } catch (e) {}
     }
     window.addEventListener('resize', fixCameraLayer);
+    new MutationObserver(() => fixCameraLayer()).observe(document.body, { childList: true, subtree: true });
+    sceneEl.addEventListener('arReady', fixCameraLayer);
 
     document.getElementById('startBtn').addEventListener('click', async () => {
       /* 配乐不在这里放：按定版流程，它要等观众点中第一个热点才开始。 */
@@ -427,6 +437,7 @@
         await sceneEl.systems['mindar-image-system'].start();
         fixCameraLayer();
         setTimeout(fixCameraLayer, 1500);
+        setTimeout(fixCameraLayer, 3000);
         scanHint.textContent = '请对准虹桥段图画扫描…';
       } catch (e) {
         scanHint.textContent = '摄像头没打开：多半是相机权限被拒了，去浏览器设置里允许后刷新重试';
