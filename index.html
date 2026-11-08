@@ -172,7 +172,7 @@
     <div class="divider"><span class="lineL"></span>◆<span class="lineR"></span></div>
     <p>把手机对准虹桥段的图画进行扫描，<br>画会先动起来，停稳之后，<br>点一点画上发光的圆点，听听这三处的故事。</p>
     <button id="startBtn">开始体验</button>
-    <p style="font-size:13px; opacity:.9; letter-spacing:1px; color:#e8c87e;">v5.11 · 显示启动错误</p>
+    <p style="font-size:13px; opacity:.9; letter-spacing:1px; color:#e8c87e;">v5.12 · 启动隔离诊断</p>
     <p style="font-size:11px; opacity:.55; margin-top:-8px;">配乐：“Guzheng City” by Kevin MacLeod（incompetech.com），CC BY 4.0</p>
   </div>
 
@@ -420,10 +420,12 @@
       try { sceneEl.renderer.setClearColor(0x000000, 0); } catch (e) {}
     }
     window.addEventListener('resize', fixCameraLayer);
-    new MutationObserver(() => fixCameraLayer()).observe(document.body, { childList: true, subtree: true });
+    let layerFixArmed = false;   /* v5.12：start() 成功后才武装图层钉制，启动过程中不插手 */
+    new MutationObserver(() => { if (layerFixArmed) fixCameraLayer(); }).observe(document.body, { childList: true, subtree: true });
     sceneEl.addEventListener('arReady', fixCameraLayer);
 
     document.getElementById('startBtn').addEventListener('click', async () => {
+      if (phase !== 'idle') return;   /* 防连点：start() 重入可能直接抛错 */
       /* 配乐不在这里放：按定版流程，它要等观众点中第一个热点才开始。 */
       startScreen.style.display = 'none';
       scanHint.style.display = 'block';
@@ -433,14 +435,22 @@
          谁也不等谁。旧顺序是先预热再开摄像头，预热在手机上一卡住，就成了
          「不问权限 + 白屏」。开失败也不再白屏装死，把原因写在提示条上。 */
       const priming = primeMedia();
+      /* v5.12：start() 单独一个 try——v5.11 实测它抛 TypeError（不是权限
+         NotAllowedError、也不是相机被占 NotReadableError）。图层钉制移出
+         启动路径并自带保护：就算它出错，也不许冒充「摄像头没打开」。 */
+      let started = false;
       try {
         await sceneEl.systems['mindar-image-system'].start();
-        fixCameraLayer();
-        setTimeout(fixCameraLayer, 1500);
-        setTimeout(fixCameraLayer, 3000);
-        scanHint.textContent = '请对准虹桥段图画扫描…';
+        started = true;
       } catch (e) {
-        scanHint.textContent = '摄像头没打开（错误：' + (e && e.name ? e.name : '未知') + '）——先关掉其他开着相机的标签页，再刷新重试；还不行把这行字发我';
+        scanHint.textContent = '摄像头没打开（' + (e && e.name ? e.name : '未知') + '：' + (e && e.message ? e.message : '无详情') + '）——把这行字截图发我';
+      }
+      if (started) {
+        layerFixArmed = true;
+        try { fixCameraLayer(); } catch (e) {}
+        setTimeout(() => { try { fixCameraLayer(); } catch (e) {} }, 1500);
+        setTimeout(() => { try { fixCameraLayer(); } catch (e) {} }, 3000);
+        scanHint.textContent = '请对准虹桥段图画扫描…';
       }
       await priming;
     });
