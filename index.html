@@ -172,7 +172,7 @@
     <div class="divider"><span class="lineL"></span>◆<span class="lineR"></span></div>
     <p>把手机对准虹桥段的图画进行扫描，<br>画会先动起来，停稳之后，<br>点一点画上发光的圆点，听听这三处的故事。</p>
     <button id="startBtn">开始体验</button>
-    <p style="font-size:13px; opacity:.9; letter-spacing:1px; color:#e8c87e;">v5.10 · iPhone 图层加固</p>
+    <p style="font-size:13px; opacity:.9; letter-spacing:1px; color:#e8c87e;">v5.11 · 显示启动错误</p>
     <p style="font-size:11px; opacity:.55; margin-top:-8px;">配乐：“Guzheng City” by Kevin MacLeod（incompetech.com），CC BY 4.0</p>
   </div>
 
@@ -440,7 +440,7 @@
         setTimeout(fixCameraLayer, 3000);
         scanHint.textContent = '请对准虹桥段图画扫描…';
       } catch (e) {
-        scanHint.textContent = '摄像头没打开：多半是相机权限被拒了，去浏览器设置里允许后刷新重试';
+        scanHint.textContent = '摄像头没打开（错误：' + (e && e.name ? e.name : '未知') + '）——先关掉其他开着相机的标签页，再刷新重试；还不行把这行字发我';
       }
       await priming;
     });
