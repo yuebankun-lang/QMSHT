@@ -635,7 +635,7 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
           boardEl.classList.add("done");
           var sec = elapsedSec();
           document.getElementById("winStats").textContent =
-            "你用了 " + fmtTime(sec) + "、共 " + moves + " 步，把老洋房拼回了原樣。";
+            "你用了 " + fmtTime(sec) + "、共 " + moves + " 步，把" + PHOTOS[curPhoto].name + "拼回了原樣。";
           var panel = document.getElementById("winPanel");
           panel.classList.add("show");
           setTimeout(function () {
