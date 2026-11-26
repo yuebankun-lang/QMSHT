@@ -284,13 +284,13 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
           <button type="button" id="againBtn">再玩一次</button>
         </div>
         <a class="reserve-btn" href="https://museum.hksyu.edu/#reservation" target="_blank" rel="noopener">預約參觀校史展</a>
-        <p class="reserve-note">12 月 1–15 日・寶馬山校園綜合大樓，來現場看看真照片。</p>
+        <p class="reserve-note">校史展常設展覽，來現場看看真照片。</p>
       </section>
 
       <footer>
         <span id="photoCredit">照片：跑馬地樹仁書院舊校舍（館方提供，翻拍件）</span><br />
         香港樹仁大學・大學歷史博物館 校史展<br />
-        校史展 12 月 1–15 日・寶馬山校園綜合大樓・<a href="https://museum.hksyu.edu/#reservation" target="_blank" rel="noopener">預約參觀</a>
+        校史展・常設展覽・<a href="https://museum.hksyu.edu/#reservation" target="_blank" rel="noopener">預約參觀</a>
       </footer>
     </main>
 
@@ -703,7 +703,7 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
           ctx.strokeStyle = ink; ctx.lineWidth = 2; ctx.strokeRect(px, py, pw, ph);
           ctx.fillStyle = soft;
           ctx.font = "26px 'Songti TC','Noto Serif TC',serif";
-          ctx.fillText("跑馬地・樹仁書院舊校舍", W / 2, py + ph + 44);
+          ctx.fillText(PHOTOS[curPhoto].full, W / 2, py + ph + 44);
 
           // 主標
           var titleY = py + ph + 138;
@@ -732,10 +732,6 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
           ctx.font = "32px 'PingFang TC','Microsoft JhengHei',sans-serif";
           ctx.fillText("用時 " + fmtTime(sec) + " ・ 共 " + moves + " 步 ・ 完成拼圖", W / 2, titleY + 158);
 
-          // 日期
-          var now = new Date();
-          var dateStr = now.getFullYear() + " 年 " + (now.getMonth() + 1) + " 月 " + now.getDate() + " 日";
-          ctx.fillText(dateStr, W / 2, titleY + 208);
 
           // 二維碼（左下）＋說明
           var qr = makeQRCanvas();
@@ -755,6 +751,8 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
           ctx.font = "25px 'PingFang TC','Microsoft JhengHei',sans-serif";
           ctx.fillText("把老照片拼回來，", qrX + qrSize + 36, qrY + 106);
           ctx.fillText("做下一位時光守護者。", qrX + qrSize + 36, qrY + 142);
+          var now = new Date();
+          ctx.fillText(now.getFullYear() + " 年 " + (now.getMonth() + 1) + " 月 " + now.getDate() + " 日", qrX + qrSize + 36, qrY + 178);
           ctx.textAlign = "center";
           return cv;
         }
