@@ -205,9 +205,16 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
         background: var(--btn); color: var(--btn-ink); text-decoration: none;
         font-size: 15px; letter-spacing: .06em; border: 1px solid var(--btn);
       }
+      .reserve-btn {
+        display: inline-flex; align-items: center; justify-content: center; min-height: 48px;
+        padding: 12px 22px; margin-top: 16px; background: #a63d2e; color: #fdf6e3;
+        text-decoration: none; font-size: 16px; font-weight: 700; letter-spacing: .08em; border-radius: 4px;
+      }
+      .reserve-note { margin: 8px 0 0; font-size: 13px; color: var(--ink-soft); }
       footer {
         margin-top: 34px; text-align: center; font-size: 12.5px; line-height: 1.9; color: var(--ink-soft);
       }
+      footer a { color: #8a5a1d; font-weight: 700; }
       #qrHost { position: absolute; left: -9999px; top: -9999px; width: 240px; height: 240px; }
     </style>
   </head>
@@ -276,11 +283,14 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
           <a id="posterDownload" href="#" download="樹仁時光守護者海報.png">下載海報</a>
           <button type="button" id="againBtn">再玩一次</button>
         </div>
+        <a class="reserve-btn" href="https://museum.hksyu.edu/#reservation" target="_blank" rel="noopener">預約參觀校史展</a>
+        <p class="reserve-note">12 月 1–15 日・寶馬山校園綜合大樓，來現場看看真照片。</p>
       </section>
 
       <footer>
         <span id="photoCredit">照片：跑馬地樹仁書院舊校舍（館方提供，翻拍件）</span><br />
-        香港樹仁大學・大學歷史博物館 校史展
+        香港樹仁大學・大學歷史博物館 校史展<br />
+        校史展 12 月 1–15 日・寶馬山校園綜合大樓・<a href="https://museum.hksyu.edu/#reservation" target="_blank" rel="noopener">預約參觀</a>
       </footer>
     </main>
 
