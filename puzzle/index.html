@@ -130,6 +130,10 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
         font-size: 13px; font-weight: 700; line-height: 1;
         border-radius: 999px; pointer-events: none;
       }
+      .mode-row { display: flex; gap: 8px; justify-content: center; margin: 2px 0 10px; }
+      .mode-btn { padding: 7px 16px; border-radius: 999px; border: 1.5px solid #c9a86a; background: transparent; color: #f3e9d2; font-size: 14px; letter-spacing: .06em; cursor: pointer; }
+      .mode-btn.active { background: #c9a86a; color: #0d2f3a; font-weight: 700; }
+      .tile.selected { box-shadow: inset 0 0 0 4px #c9a86a, inset 0 0 22px rgba(201, 168, 106, .65); z-index: 3; }
       .tile.locked { cursor: default; }
       .tile.hinted {
         box-shadow: inset 0 0 0 4px var(--gold), inset 0 0 22px rgba(185, 138, 47, .65);
@@ -206,7 +210,7 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
       <header class="masthead">
         <p class="over">校 史 展 線 上 互 動</p>
         <h1 class="serif">時空拼圖</h1>
-        <p class="sub">照片裏是跑馬地的樹仁書院舊校舍——牆上「樹仁書院」四個字還在，門口站着當年的學生。八塊圖塊被時光打亂了，還留下一格空位，點按與空格相鄰的圖塊，把它一塊一塊拼回來。</p>
+        <p class="sub">照片裏是跑馬地的樹仁書院舊校舍——牆上「樹仁書院」四個字還在，門口站着當年的學生。<span id="howtoText">九塊圖塊被時光打亂了：點一塊選中，再點另一塊，兩塊互換位置，一塊一塊拼回來。</span></p>
       </header>
 
       <div class="rule"><span></span></div>
@@ -217,6 +221,10 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
         <div class="stat"><div class="k">打 亂</div><div class="v">20 步內</div></div>
       </div>
 
+      <div class="mode-row" role="group" aria-label="玩法模式">
+        <button type="button" id="modeSwap" class="mode-btn active">交換式 · 簡單</button>
+        <button type="button" id="modeSlide" class="mode-btn">華容道 · 挑戰</button>
+      </div>
       <div class="board-wrap">
         <div class="board" id="board" role="group" aria-label="拼圖盤">
           <div class="ghost"></div>
@@ -228,7 +236,7 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
       <div class="controls">
         <button type="button" id="restartBtn">重新開始</button>
         <button type="button" id="hintBtn" class="seal-btn ready">提示一步</button>
-        <span class="hint-note" id="hintNote">提示不限次：點一下會高亮下一步該滑的圖塊</span>
+        <span class="hint-note" id="hintNote">提示不限次：點一下會高亮要互換的兩塊圖塊</span>
       </div>
 
       <div class="ref-row">
@@ -305,6 +313,8 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
         /* ================= 拼圖狀態 ================= */
         var GOAL = [0, 1, 2, 3, 4, 5, 6, 7, 8]; // 8 = 空格
         var board = GOAL.slice();
+        var mode = "swap";     // "swap" 交換式（默認） | "slide" 華容道
+        var selected = -1;     // 交換式已選中的圖塊值
         var moves = 0;
         var startedAt = null;   // 首次移動的時間戳
         var finishedAt = null;
@@ -316,10 +326,11 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
         var statTime = document.getElementById("statTime");
         var hintBtn = document.getElementById("hintBtn");
         var hintNote = document.getElementById("hintNote");
+        var howtoText = document.getElementById("howtoText");
         var tileEls = {}; // tileValue -> element
 
-        // 建立 8 塊圖塊（值 0..7），空格不建元素
-        for (var t = 0; t < 8; t++) {
+        // 建立 9 塊圖塊（值 0..8）；華容道模式下第 9 塊隱藏、充當空格
+        for (var t = 0; t < 9; t++) {
           (function (val) {
             var el = document.createElement("button");
             el.type = "button";
@@ -345,7 +356,9 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
         }
 
         function render() {
-          for (var v = 0; v < 8; v++) {
+          for (var v = 0; v < 9; v++) {
+            if (v === 8 && mode !== "swap") { tileEls[v].style.display = "none"; continue; }
+            tileEls[v].style.display = "";
             var cell = board.indexOf(v);
             var p = cellXY(cell);
             tileEls[v].style.transform = "translate(" + (p.x * 100) + "%, " + (p.y * 100) + "%)";
@@ -359,7 +372,7 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
         }
 
         // 從完成狀態反向滑動打亂：保證有解，步數不超過 SHUFFLE_STEPS
-        function shuffle() {
+        function shuffleSlide() {
           board = GOAL.slice();
           var lastBlank = -1;
           for (var i = 0; i < SHUFFLE_STEPS; i++) {
@@ -377,6 +390,24 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
             var b2 = blankCell();
             swapCells(b2 - 1 >= 0 && (b2 % 3) !== 0 ? b2 - 1 : b2 + 1, b2);
           }
+        }
+
+        function shuffleSwap() {
+          // 交換式：隨機排列九塊，任何排列都能靠互換拼回；太接近完成就重洗
+          var misplaced = 0;
+          do {
+            board = GOAL.slice();
+            for (var i = board.length - 1; i > 0; i--) {
+              var j = Math.floor(Math.random() * (i + 1));
+              var tmp = board[i]; board[i] = board[j]; board[j] = tmp;
+            }
+            misplaced = 0;
+            for (var k = 0; k < 9; k++) if (board[k] !== GOAL[k]) misplaced++;
+          } while (misplaced < 5);
+        }
+
+        function shuffle() {
+          if (mode === "swap") shuffleSwap(); else shuffleSlide();
         }
 
         function isSolved() {
@@ -399,7 +430,7 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
           statTime.textContent = fmtTime(sec);
           if (!won && sec >= HINT_AFTER_SEC && !hintBtn.classList.contains("ready")) {
             hintBtn.classList.add("ready");
-            hintNote.textContent = "提示不限次：點一下會高亮下一步該滑的圖塊";
+            hintNote.textContent = mode === "swap" ? "提示不限次：點一下會高亮要互換的兩塊圖塊" : "提示不限次：點一下會高亮下一步該滑的圖塊";
           }
         }
         function startTimer() {
@@ -411,6 +442,28 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
         /* ================= 互動 ================= */
         function onTileTap(val) {
           if (won) return;
+          if (mode === "swap") {
+            if (selected === -1) {
+              selected = val;
+              tileEls[val].classList.add("selected");
+              return;
+            }
+            if (selected === val) {
+              tileEls[val].classList.remove("selected");
+              selected = -1;
+              return;
+            }
+            var from = board.indexOf(selected);
+            var to = board.indexOf(val);
+            tileEls[selected].classList.remove("selected");
+            selected = -1;
+            swapCells(from, to);
+            moves++;
+            if (!startedAt) { startedAt = Date.now(); startTimer(); }
+            render();
+            if (isSolved()) onWin();
+            return;
+          }
           var cell = board.indexOf(val);
           var b = blankCell();
           if (!adjacent(cell, b)) return;
@@ -428,8 +481,11 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
           finishedAt = null;
           if (timerId) { clearInterval(timerId); timerId = null; }
           statTime.textContent = "0:00";
+          selected = -1;
+          for (var tv = 0; tv < 9; tv++) tileEls[tv].classList.remove("selected");
+          howtoText.textContent = mode === "swap" ? "九塊圖塊被時光打亂了：點一塊選中，再點另一塊，兩塊互換位置，一塊一塊拼回來。" : "八塊圖塊被時光打亂了，還留下一格空位，點按與空格相鄰的圖塊，把它一塊一塊拼回來。";
           hintBtn.classList.add("ready");
-          hintNote.textContent = "提示不限次：點一下會高亮下一步該滑的圖塊";
+          hintNote.textContent = mode === "swap" ? "提示不限次：點一下會高亮要互換的兩塊圖塊" : "提示不限次：點一下會高亮下一步該滑的圖塊";
           boardEl.classList.remove("done");
           document.getElementById("winPanel").classList.remove("show");
           document.getElementById("posterPanel").classList.remove("show");
@@ -439,6 +495,16 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
         }
 
         document.getElementById("restartBtn").addEventListener("click", resetGame);
+        document.getElementById("modeSwap").addEventListener("click", function () { setMode("swap"); });
+        document.getElementById("modeSlide").addEventListener("click", function () { setMode("slide"); });
+
+        function setMode(next) {
+          if (mode === next) return;
+          mode = next;
+          document.getElementById("modeSwap").classList.toggle("active", mode === "swap");
+          document.getElementById("modeSlide").classList.toggle("active", mode === "slide");
+          resetGame();
+        }
         document.getElementById("againBtn").addEventListener("click", function () {
           resetGame();
           window.scrollTo({ top: 0, behavior: "smooth" });
@@ -496,8 +562,30 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
           return -1;
         }
 
+        function swapHintPair(state) {
+          for (var cell = 0; cell < 9; cell++) {
+            var v = state[cell];
+            if (v !== GOAL[cell]) return [v, state[v]];
+          }
+          return null;
+        }
+
+        function showSwapHint() {
+          var pair = swapHintPair(board);
+          if (!pair) return;
+          for (var i = 0; i < 2; i++) {
+            (function (el) {
+              el.classList.remove("hinted");
+              void el.offsetWidth;
+              el.classList.add("hinted");
+              setTimeout(function () { el.classList.remove("hinted"); }, 1600);
+            })(tileEls[pair[i]]);
+          }
+        }
+
         hintBtn.addEventListener("click", function () {
           if (won) return;
+          if (mode === "swap") { showSwapHint(); return; }
           var v = solveNextTile(board);
           if (v < 0) return;
           var el = tileEls[v];
@@ -676,7 +764,7 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
             var pass = 0;
             for (var g = 0; g < 20; g++) {
               var saved = board;
-              shuffle();
+              shuffleSlide();
               var st = board.slice();
               var steps = 0;
               while (st.join("") !== GOAL.join("") && steps < 200) {
