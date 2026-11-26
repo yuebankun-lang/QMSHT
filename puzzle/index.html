@@ -122,6 +122,14 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
         transition: transform .18s ease;
         cursor: pointer;
       }
+      .tile .badge {
+        position: absolute; right: 5px; bottom: 5px;
+        min-width: 20px; height: 20px; padding: 0 4px;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(13, 47, 58, .82); color: #f3e9d2;
+        font-size: 13px; font-weight: 700; line-height: 1;
+        border-radius: 999px; pointer-events: none;
+      }
       .tile.locked { cursor: default; }
       .tile.hinted {
         box-shadow: inset 0 0 0 4px var(--gold), inset 0 0 22px rgba(185, 138, 47, .65);
@@ -317,6 +325,10 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
             el.type = "button";
             el.className = "tile";
             el.setAttribute("aria-label", "圖塊 " + (val + 1));
+            var badge = document.createElement("span");
+            badge.className = "badge";
+            badge.textContent = val + 1;
+            el.appendChild(badge);
             var hc = val % 3, hr = Math.floor(val / 3);
             el.style.backgroundPosition = (hc * 50) + "% " + (hr * 50) + "%";
             el.addEventListener("click", function () { onTileTap(val); });
